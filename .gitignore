@@ -1,0 +1,8 @@
+# Python
+*.pyc
+
+# Local testing
+*.csv
+*.sqlite3
+config.py
+sandbox.py
