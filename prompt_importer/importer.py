@@ -1,4 +1,5 @@
 import abc
+import re
 import sqlite3
 
 from beancount.ingest import importer
@@ -24,5 +25,22 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         columns = "(field text, regex text, recipient text, skip integer)"
         print(self.name())
         cur.execute(f"CREATE TABLE if not exists {self.name()} {columns}")
+
+        mappings = list(cur.execute(f"SELECT * FROM {self.name()}"))
+
+        for event in self.get_events(filename):
+            recipient_account = None
+            skip_event = False
+            for field, regex, recipient, skip in mappings:
+                r = re.compile(regex)
+                if re.fullmatch(r, event.get_field(field)):
+                    if skip:
+                        skip_event = True
+                    else:
+                        recipient_account = recipient
+                    break
+
+            if skip_event:
+                continue
 
         return []
