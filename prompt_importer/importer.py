@@ -2,6 +2,7 @@ import abc
 import re
 import sqlite3
 
+from beancount.core import data
 from beancount.ingest import importer
 import blessed
 
@@ -17,6 +18,12 @@ class Event(abc.ABC):
 
     @abc.abstractmethod
     def display(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def get_transaction(
+        self, filename: str, index: int, recipient_account: str
+    ) -> data.Transaction:
         pass
 
 
@@ -50,8 +57,10 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         new_id_mappings = []
         new_regex_mappings = []
 
+        txns = []
+        print_txns = True
         term = blessed.Terminal()
-        for event in self.get_events(f):
+        for index, event in enumerate(self.get_events(f)):
             recipient_account = None
             skip_event = False
 
@@ -77,10 +86,8 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                             recipient_account = recipient
                         break
 
-            if skip_event:
-                continue
-
             if recipient_account is None:
+                print_txns = False
                 skip_char = "x"
 
                 print(term.home + term.clear)
@@ -89,6 +96,8 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                     f"What should the recipient account be? ('{skip_char}' to not extract a transaction)"
                 )
                 recipient_account = self.prompt().strip()
+                if recipient_account == skip_char:
+                    skip_event = True
                 print(
                     f"What regex should identify this account (or skip) in the future? ('{skip_char}' to not identify this accoung with a regex)"
                 )
@@ -96,7 +105,7 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
                 if identify_regex == skip_char:
                     if recipient_account == skip_char:
-                        new_id_mappings.append((event.get_id(), "", 1))
+                        new_id_mappings.append((event.get_id(), "skip", 1))
                     else:
                         new_id_mappings.append((event.get_id(), recipient_account, 0))
                 else:
@@ -104,11 +113,16 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                     target_field = self.prompt().strip()
 
                     if recipient_account == skip_char:
-                        new_regex_mappings.append((target_field, identify_regex, "", 1))
+                        new_regex_mappings.append(
+                            (target_field, identify_regex, "skip", 1)
+                        )
                     else:
                         new_regex_mappings.append(
                             (target_field, identify_regex, recipient_account, 0)
                         )
+
+            if print_txns and not skip_event:
+                txns.append(event.get_transaction(f.name, index, recipient_account))
 
         if new_id_mappings:
             query = f"INSERT INTO {event_id_table_name} VALUES"
@@ -126,4 +140,7 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
         con.close()
 
-        return []
+        if print_txns:
+            return txns
+        else:
+            return []
