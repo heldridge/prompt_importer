@@ -1,4 +1,5 @@
 import abc
+import collections
 import re
 import sqlite3
 
@@ -54,9 +55,24 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         id_mappings = list(cur.execute(f"SELECT * FROM {event_id_table_name}"))
         regex_mappings = list(cur.execute(f"SELECT * FROM {regex_table_name}"))
 
+        known_recipients = collections.Counter(
+            [m[1] for m in id_mappings] + [m[2] for m in regex_mappings]
+        )
+
+        top_known_recipients = {}
+        for index, (kr, _) in enumerate(known_recipients.most_common(3)):
+            top_known_recipients[str(index + 1)] = kr
+
+        top_known_recipients_message = ""
+        for label, kr in top_known_recipients.items():
+            top_known_recipients_message += f"{label}. {kr}"
+
+        print(known_recipients)
+
         new_id_mappings = []
         new_regex_mappings = []
 
+        recent_recipients = collections.Counter()
         txns = []
         print_txns = True
         term = blessed.Terminal()
@@ -95,6 +111,7 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                 print(
                     f"What should the recipient account be? ('{skip_char}' to not extract a transaction)"
                 )
+                print(top_known_recipients_message)
                 recipient_account = self.prompt().strip()
                 if recipient_account == skip_char:
                     skip_event = True
