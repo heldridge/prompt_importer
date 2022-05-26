@@ -2,7 +2,6 @@ import abc
 import collections
 import re
 import sqlite3
-from tracemalloc import start
 
 from beancount.core import data
 from beancount.ingest import importer
