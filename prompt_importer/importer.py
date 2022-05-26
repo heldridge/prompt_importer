@@ -7,7 +7,19 @@ from beancount.core import data
 from beancount.ingest import importer
 import blessed
 
-import queueset
+
+class QueueSet:
+    # A queue that bumps duplicate items to the front instead of prepending them
+    def __init__(self, size):
+        self.size = size
+        self.queue = []
+
+    def push(self, item):
+        self.queue = [item] + list(filter(lambda i: i != item, self.queue))
+        self.queue = self.queue[: self.size]
+
+    def __iter__(self):
+        return iter(self.queue)
 
 
 class Event(abc.ABC):
@@ -65,16 +77,16 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         for index, (kr, _) in enumerate(known_recipients.most_common(3)):
             top_known_recipients[str(index + 1)] = kr
 
-        top_known_recipients_message = ""
-        for label, kr in top_known_recipients.items():
-            top_known_recipients_message += f"{label}. {kr}"
+        num_top_known_recipients = len(top_known_recipients)
 
-        print(known_recipients)
+        # top_known_recipients_message = ""
+        # for label, kr in top_known_recipients.items():
+        #     top_known_recipients_message += f"{label}. {kr}"
 
         new_id_mappings = []
         new_regex_mappings = []
 
-        recent_recipients = queueset.QueueSet(3)
+        recent_recipients = QueueSet(3)
         txns = []
         print_txns = True
         term = blessed.Terminal()
@@ -114,12 +126,14 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                     f"What should the recipient account be? ('{skip_char}' to not extract a transaction)"
                 )
 
-                start_index = len(top_known_recipients)
                 for rr_index, rr in enumerate(recent_recipients):
-                    top_known_recipients[str(start_index + rr_index + 1)] = rr
+                    top_known_recipients[
+                        str(num_top_known_recipients + rr_index + 1)
+                    ] = rr
+
                 known_recipients_message = ""
                 for label, kr in top_known_recipients.items():
-                    top_known_recipients_message += f"{label}. {kr}"
+                    known_recipients_message += f"{label}. {kr}   "
                 print(known_recipients_message)
 
                 recipient_account = self.prompt().strip()
