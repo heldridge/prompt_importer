@@ -79,10 +79,6 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
         num_top_known_recipients = len(top_known_recipients)
 
-        # top_known_recipients_message = ""
-        # for label, kr in top_known_recipients.items():
-        #     top_known_recipients_message += f"{label}. {kr}"
-
         new_id_mappings = []
         new_regex_mappings = []
 
