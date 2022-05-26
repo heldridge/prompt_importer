@@ -2,10 +2,13 @@ import abc
 import collections
 import re
 import sqlite3
+from tracemalloc import start
 
 from beancount.core import data
 from beancount.ingest import importer
 import blessed
+
+import queueset
 
 
 class Event(abc.ABC):
@@ -72,7 +75,7 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         new_id_mappings = []
         new_regex_mappings = []
 
-        recent_recipients = collections.Counter()
+        recent_recipients = queueset.QueueSet(3)
         txns = []
         print_txns = True
         term = blessed.Terminal()
@@ -111,10 +114,22 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                 print(
                     f"What should the recipient account be? ('{skip_char}' to not extract a transaction)"
                 )
-                print(top_known_recipients_message)
+
+                start_index = len(top_known_recipients)
+                for rr_index, rr in enumerate(recent_recipients):
+                    top_known_recipients[str(start_index + rr_index + 1)] = rr
+                known_recipients_message = ""
+                for label, kr in top_known_recipients.items():
+                    top_known_recipients_message += f"{label}. {kr}"
+                print(known_recipients_message)
+
                 recipient_account = self.prompt().strip()
+
                 if recipient_account == skip_char:
                     skip_event = True
+                else:
+                    recent_recipients.push(recipient_account)
+
                 print(
                     f"What regex should identify this account (or skip) in the future? ('{skip_char}' to not identify this accoung with a regex)"
                 )
