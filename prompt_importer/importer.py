@@ -125,6 +125,9 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
                 recipient_account = self.prompt().strip()
 
+                if recipient_account in top_known_recipients:
+                    recipient_account = top_known_recipients[recipient_account]
+
                 if recipient_account == skip_char:
                     skip_event = True
                 else:
