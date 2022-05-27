@@ -12,7 +12,7 @@ What should the recipient account be? ('x' to not extract a transaction)
 >>
 ```
 
-It also provides functionality to store regexes with which to identify the same account in the future.
+It also provides functionality to store regexes with which to automatically identify recipient accounts in the future.
 
 ## Usage
 
