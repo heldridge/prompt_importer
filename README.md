@@ -21,7 +21,7 @@ It also provides functionality to store regexes with which to identify the same 
 To create class that derives from `PromptImporter` you must first define a subclass of `prompt_importer.Event`.
 Events represent single transactions from whatever type of file you are importing.
 For example, if you are importing a `csv` file, you may have one event per row.
-The subclass should implement the following methods.
+The subclass should implement the following methods:
 
 #### get_field(self, field: str) -> str
 
@@ -42,3 +42,16 @@ This should return a transaction associated with an event.
 To help build the transaction, it takes the file the event was sourced from, its index within the file, and the account that should be the "recipient" of the transaction.
 
 Note that the `data.Transaction` type refers to the `data` from `beancount.core`.
+
+### Importers
+
+Once you have defined an event you can create a subclass of `PromptImporter`.
+To do so, you must implement the typical methods associated with the beancount`importer.ImporterProtocol` class.
+**Important** the value the method `name(self)` returns should _not_ contain characters not allowed in SQLite table names, such as periods.
+
+The importer should also implement the following method:
+
+#### get_events(self, f) -> list[Event]
+
+Given a beancount file this should return a list of events for the
+importer to process.
