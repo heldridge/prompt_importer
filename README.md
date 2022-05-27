@@ -47,7 +47,7 @@ Note that the `data.Transaction` type refers to the `data` from `beancount.core`
 
 Once you have defined an event you can create a subclass of `PromptImporter`.
 To do so, you must implement the typical methods associated with the beancount`importer.ImporterProtocol` class.
-**Important** the value the method `name(self)` returns should _not_ contain characters not allowed in SQLite table names, such as periods.
+**Important:** the value the method `name(self)` returns should _not_ contain characters not allowed in SQLite table names, such as periods.
 
 The importer should also implement the following method:
 
