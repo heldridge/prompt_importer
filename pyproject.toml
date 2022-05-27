@@ -1,8 +1,11 @@
 [tool.poetry]
 name = "prompt_importer"
-version = "0.1.0"
-description = ""
+version = "0.1.1"
+description = "A base class for building prompt-based beancount importers"
 authors = ["Harry Eldridge <eldridgemharry@gmail.com>"]
+readme = "README.md"
+repository = "https://github.com/heldridge/prompt_importer"
+license = "GPLv3"
 
 [tool.poetry.dependencies]
 python = "^3.10"
