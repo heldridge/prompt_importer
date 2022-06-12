@@ -44,9 +44,10 @@ class Event(abc.ABC):
 
 
 class PromptImporter(importer.ImporterProtocol, abc.ABC):
-    def __init__(self, json_filename: str, skip_character: str = "x"):
+    def __init__(self, json_filename: str, skip_character: str = "x", regex_field=None):
         self.json_filename = json_filename
         self.skip_characteracter = skip_character
+        self.regex_field = regex_field
 
     @abc.abstractmethod
     def get_events(self, f) -> list[Event]:
@@ -163,8 +164,12 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                         {"event_id": event.get_id(), "recipient": recipient_account}
                     )
                 else:
-                    print(f"What field should the regex act upon?")
-                    target_field = self.prompt().strip()
+                    if self.regex_field is not None:
+                        target_field = self.regex_field
+                    else:
+                        print(f"What field should the regex act upon?")
+                        target_field = self.prompt().strip()
+
                     regex_mappings.append(
                         {
                             "field": target_field,
