@@ -76,13 +76,13 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                     {
                         field: ...,
                         regex: ...,
-                        recipient ..., (None if skip)
+                        recipient ...,
                     }
                 ],
                 id: [
                     {
                         event_id: ...,
-                        recipient: ..., (None if skip)
+                        recipient: ...,
                     }
                 ]
             }
