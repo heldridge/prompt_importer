@@ -1,7 +1,7 @@
 import abc
 import collections
+import json
 import re
-import sqlite3
 
 from beancount.core import data
 from beancount.ingest import importer
@@ -43,8 +43,8 @@ class Event(abc.ABC):
 
 
 class PromptImporter(importer.ImporterProtocol, abc.ABC):
-    def __init__(self, db_file):
-        self.db_file = db_file
+    def __init__(self, json_filename: str):
+        self.json_filename = json_filename
 
     @abc.abstractmethod
     def get_events(self, f) -> list[Event]:
@@ -54,23 +54,45 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         return input(">> ")
 
     def extract(self, f):
-        con = sqlite3.connect(self.db_file)
-        cur = con.cursor()
+        top_level_key = self.name()
 
-        event_id_table_name = f"{self.name()}_id"
-        regex_table_name = f"{self.name()}_regex"
+        try:
+            with open(self.json_filename, "r") as infile:
+                mapping_data = json.load(infile)
+        except FileNotFoundError:
+            print("Mapping file does not exist, creating...")
+            mapping_data = {}
 
-        id_columns = f"(event_id text, recipient text, skip integer)"
-        cur.execute(f"CREATE TABLE if not exists {event_id_table_name} {id_columns}")
+        if top_level_key not in mapping_data:
+            mapping_data[top_level_key] = {"id": [], "regex": []}
 
-        regex_columns = f"(field text, regex text, recipient text, skip integer)"
-        cur.execute(f"CREATE TABLE if not exists {regex_table_name} {regex_columns}")
+        """
+        mapping_data structure:
+        {
+            <top_level_key>: {
+                regex: [
+                    {
+                        field: ...,
+                        regex: ...,
+                        recipient ..., (None if skip)
+                    }
+                ],
+                id: [
+                    {
+                        event_id: ...,
+                        recipient: ..., (None if skip)
+                    }
+                ]
+            }
+        }
+        """
 
-        id_mappings = list(cur.execute(f"SELECT * FROM {event_id_table_name}"))
-        regex_mappings = list(cur.execute(f"SELECT * FROM {regex_table_name}"))
+        id_mappings = mapping_data[top_level_key]["id"]
+        regex_mappings = mapping_data[top_level_key]["regex"]
 
         known_recipients = collections.Counter(
-            [m[1] for m in id_mappings] + [m[2] for m in regex_mappings]
+            [m["recipient"] for m in regex_mappings]
+            + [m["recipient"] for m in id_mappings]
         )
 
         top_known_recipients = {}
@@ -79,38 +101,25 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
         num_top_known_recipients = len(top_known_recipients)
 
-        new_id_mappings = []
-        new_regex_mappings = []
-
         recent_recipients = QueueSet(3)
         txns = []
         print_txns = True
         term = blessed.Terminal()
         for index, event in enumerate(self.get_events(f)):
             recipient_account = None
-            skip_event = False
 
-            for event_id, recipient, skip in id_mappings + new_id_mappings:
-                if event.get_id() == event_id:
-                    if skip:
-                        skip_event = True
-                    else:
-                        recipient = recipient
+            # Check if one of the IDs matches
+            for id_mapping in id_mappings:
+                if event.get_id() == id_mapping["event_id"]:
+                    recipient_account = id_mapping["recipient"]
                     break
 
-            if recipient_account is None and not skip_event:
-                for field, regex, recipient, skip in (
-                    regex_mappings + new_regex_mappings
-                ):
-
-                    # SQLite adds additional escapes, remove them here
-                    r = re.compile(regex.replace("\\\\", "\\"))
-                    if re.fullmatch(r, event.get_field(field)):
-                        if skip:
-                            skip_event = True
-                        else:
-                            recipient_account = recipient
-                        break
+            # If no ID match occurred, check if any of the regexes matches
+            if recipient_account is None:
+                for regex_mapping in regex_mappings:
+                    r = re.compile(regex_mapping["regex"])
+                    if re.fullmatch(r, event.get_field(regex_mapping["field"])):
+                        recipient_account = regex_mapping["recipient"]
 
             if recipient_account is None:
                 print_txns = False
@@ -138,7 +147,7 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                     recipient_account = top_known_recipients[recipient_account]
 
                 if recipient_account == skip_char:
-                    skip_event = True
+                    recipient_account = "skip"
                 else:
                     recent_recipients.push(recipient_account)
 
@@ -148,41 +157,25 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                 identify_regex = self.prompt().strip()
 
                 if identify_regex == skip_char:
-                    if recipient_account == skip_char:
-                        new_id_mappings.append((event.get_id(), "skip", 1))
-                    else:
-                        new_id_mappings.append((event.get_id(), recipient_account, 0))
+                    id_mappings.append(
+                        {"event_id": event.get_id(), "recipient": recipient_account}
+                    )
                 else:
                     print(f"What field should the regex act upon?")
                     target_field = self.prompt().strip()
+                    regex_mappings.append(
+                        {
+                            "field": target_field,
+                            "regex": identify_regex,
+                            "recipient": recipient_account,
+                        }
+                    )
 
-                    if recipient_account == skip_char:
-                        new_regex_mappings.append(
-                            (target_field, identify_regex, "skip", 1)
-                        )
-                    else:
-                        new_regex_mappings.append(
-                            (target_field, identify_regex, recipient_account, 0)
-                        )
-
-            if print_txns and not skip_event:
+            if print_txns and recipient_account != "skip":
                 txns.append(event.get_transaction(f.name, index, recipient_account))
 
-        if new_id_mappings:
-            query = f"INSERT INTO {event_id_table_name} VALUES"
-            for new_id_mapping in new_id_mappings:
-                query += f"\n{new_id_mapping},"
-            cur.execute(query[:-1])
-            con.commit()
-
-        if new_regex_mappings:
-            query = f"INSERT INTO {regex_table_name} VALUES"
-            for new_regex_mapping in new_regex_mappings:
-                query += f"\n{new_regex_mapping},"
-            cur.execute(query[:-1])
-            con.commit()
-
-        con.close()
+        with open(self.json_filename, "w+") as outfile:
+            json.dump(mapping_data, outfile, indent=4)
 
         if print_txns:
             return txns

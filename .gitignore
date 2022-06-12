@@ -4,6 +4,6 @@ dist/*
 
 # Local testing
 *.csv
-*.sqlite3
+*.json
 config.py
 sandbox.py
