@@ -6,6 +6,7 @@ import re
 from beancount.core import data
 from beancount.ingest import importer
 import blessed
+from pytest import skip
 
 
 class QueueSet:
@@ -43,8 +44,9 @@ class Event(abc.ABC):
 
 
 class PromptImporter(importer.ImporterProtocol, abc.ABC):
-    def __init__(self, json_filename: str):
+    def __init__(self, json_filename: str, skip_character: str = "x"):
         self.json_filename = json_filename
+        self.skip_characteracter = skip_character
 
     @abc.abstractmethod
     def get_events(self, f) -> list[Event]:
@@ -123,12 +125,12 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
 
             if recipient_account is None:
                 print_txns = False
-                skip_char = "x"
+                self.skip_character = "x"
 
                 print(term.home + term.clear)
                 print(event.display())
                 print(
-                    f"What should the recipient account be? ('{skip_char}' to not extract a transaction)"
+                    f"What should the recipient account be? ('{self.skip_character}' to not extract a transaction)"
                 )
 
                 for rr_index, rr in enumerate(recent_recipients):
@@ -146,17 +148,17 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                 if recipient_account in top_known_recipients:
                     recipient_account = top_known_recipients[recipient_account]
 
-                if recipient_account == skip_char:
+                if recipient_account == self.skip_character:
                     recipient_account = "skip"
                 else:
                     recent_recipients.push(recipient_account)
 
                 print(
-                    f"What regex should identify this account (or skip) in the future? ('{skip_char}' to not identify this accoung with a regex)"
+                    f"What regex should identify this account (or skip) in the future? ('{self.skip_character}' to not identify this accoung with a regex)"
                 )
                 identify_regex = self.prompt().strip()
 
-                if identify_regex == skip_char:
+                if identify_regex == self.skip_character:
                     id_mappings.append(
                         {"event_id": event.get_id(), "recipient": recipient_account}
                     )
