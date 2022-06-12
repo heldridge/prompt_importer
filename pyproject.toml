@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "prompt_importer"
-version = "0.2.0"
+version = "0.2.1"
 description = "A base class for building prompt-based beancount importers"
 authors = ["Harry Eldridge <eldridgemharry@gmail.com>"]
 readme = "README.md"
