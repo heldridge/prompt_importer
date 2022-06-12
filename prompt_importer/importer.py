@@ -57,6 +57,10 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
         return input(">> ")
 
     def extract(self, f):
+        def regex_matches(event: Event, field: str, regex: str) -> bool:
+            r = re.compile(regex)
+            return re.fullmatch(r, event.get_field(field))
+
         top_level_key = self.name()
 
         try:
@@ -120,8 +124,9 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
             # If no ID match occurred, check if any of the regexes matches
             if recipient_account is None:
                 for regex_mapping in regex_mappings:
-                    r = re.compile(regex_mapping["regex"])
-                    if re.fullmatch(r, event.get_field(regex_mapping["field"])):
+                    if regex_matches(
+                        event, regex_mapping["field"], regex_mapping["regex"]
+                    ):
                         recipient_account = regex_mapping["recipient"]
 
             if recipient_account is None:
@@ -157,26 +162,46 @@ class PromptImporter(importer.ImporterProtocol, abc.ABC):
                 print(
                     f"What regex should identify this account (or skip) in the future? ('{self.skip_character}' to not identify this accoung with a regex)"
                 )
-                identify_regex = self.prompt().strip()
 
-                if identify_regex == self.skip_character:
-                    id_mappings.append(
-                        {"event_id": event.get_id(), "recipient": recipient_account}
-                    )
-                else:
-                    if self.regex_field is not None:
-                        target_field = self.regex_field
+                while True:
+
+                    identify_regex = self.prompt().strip()
+
+                    if identify_regex == self.skip_character:
+                        id_mappings.append(
+                            {"event_id": event.get_id(), "recipient": recipient_account}
+                        )
+                        break
                     else:
-                        print(f"What field should the regex act upon?")
-                        target_field = self.prompt().strip()
+                        if self.regex_field is not None:
+                            target_field = self.regex_field
+                        else:
+                            print(f"What field should the regex act upon?")
+                            target_field = self.prompt().strip()
 
-                    regex_mappings.append(
-                        {
-                            "field": target_field,
-                            "regex": identify_regex,
-                            "recipient": recipient_account,
-                        }
-                    )
+                        if regex_matches(event, target_field, identify_regex):
+                            regex_mappings.append(
+                                {
+                                    "field": target_field,
+                                    "regex": identify_regex,
+                                    "recipient": recipient_account,
+                                }
+                            )
+                            break
+                        else:
+                            print(
+                                "Regex did not match this event, keep it anyway? (y/n)"
+                            )
+                            yes_or_no = self.prompt()
+                            if yes_or_no in ["y", "Y", "yes", "Yes", "YES"]:
+                                regex_mappings.append(
+                                    {
+                                        "field": target_field,
+                                        "regex": identify_regex,
+                                        "recipient": recipient_account,
+                                    }
+                                )
+                                break
 
             if print_txns and recipient_account != "skip":
                 txns.append(event.get_transaction(f.name, index, recipient_account))
